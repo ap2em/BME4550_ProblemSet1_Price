@@ -1,0 +1,655 @@
+---
+title: "ProblemSet2"
+author: "Andrew Price"
+date: "September 3, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(nycflights13)
+library(tidyverse)
+library(dplyr)
+```
+
+##5.2.4 Exercises
+
+###1. Find all flights that:
+
+Had an arrival delay of two or more hours
+Flew to Houston (IAH or HOU)
+Were operated by United, American, or Delta
+Departed in summer (July, August, and September)
+Arrived more than two hours late, but didn’t leave late
+Were delayed by at least an hour, but made up over 30 minutes in flight
+Departed between midnight and 6am (inclusive)
+
+```{r Question 1}
+(two_hour_delay <- filter(flights,arr_delay >= 120))
+(houston <- filter(flights, dest == "IAH" | dest == "HOU"))
+(operated <- filter(flights, carrier == "AA" | carrier == "UA" | carrier == "DL" ))
+(summer_depart <- filter(flights, month == 7 | month == 8 | month == 9 ))
+(two_late_normal_departure <- filter(flights,arr_delay >= 120 & dep_delay == 0))
+(delay_thirty_recover <- filter(flights, dep_delay > 60 & dep_delay - arr_delay > 30))
+(depart_time <- filter(flights, dep_time >= 0 & dep_time <= 600))
+
+```
+
+###2. Another useful dplyr filtering helper is between(). What does it do? Can you use it to simplify the code needed to answer the previous challenges?
+
+```{r Question 2}
+(summer_depart_between <- filter(flights,between(month,7,9)))
+(depart_time_between <- filter(flights,between(dep_time,0,600)))
+```
+
+between() is a shortcut for making two inequalities. It only works if what you want to filter by is greater than or equal to one and then less than or equal to the other.
+
+###3. How many flights have a missing dep_time? What other variables are missing? What might these rows represent?
+
+```{r Question 3}
+(missing_dep_time <- filter(flights, is.na(dep_time)))
+```
+
+There are 8,255 flights with missing depart times. These flights also have missing dep_delay, arr_time, arr_delay, and airtime. I assume these rows represent flights that got canceled.
+
+###4. Why is NA ^ 0 not missing? Why is NA | TRUE not missing? Why is FALSE & NA not missing? Can you figure out the general rule? (NA * 0 is a tricky counterexample!)
+
+```{r}
+NA^0
+NA | TRUE
+FALSE & NA
+NA * 0
+```
+
+NA^0 is not missing because no matter what the unknown value is, any value raised to the 0th power is 1. 
+NA | TRUE is not missing because | returns true if either of the two arguments are true, so even though NA is not true, true is always true.
+FALSE & NA is false because & requires both arguments to be true in order to pass and this case NA and FALSE are both read as not true.
+NA*O is treated differently than NA^0 because if NA was infinity, NA*0 would not be a number, while infinity^0 would still be 1.
+The general rule is that R treats NA as its own entity that is different than true or false and can only used in situations where every possible number plugged into the formula would give you the same result.
+
+##5.3.1 Exercises
+
+###1. How could you use arrange() to sort all missing values to the start? (Hint: use is.na())
+
+```{r Question 4}
+df <- tibble(x = c(5,2,NA))
+arrange(df,desc(is.na(x)))
+```
+
+###2. Sort flights to find the most delayed flights. Find the flights that left earliest.
+
+
+```{r Question 5}
+arrange(flights,desc(dep_delay),dep_time)
+arrange(flights,dep_time)
+```
+
+Wasn't sure if the question wanted it to be done on the same arrange or not, so I included both.
+
+###3. Sort flights to find the fastest flights
+
+```{r Question 6}
+arrange(flights,distance / air_time)
+```
+
+###4. Which flights travelled the longest? Which travelled the shortest?
+
+```{r Question 7}
+arrange(flights,desc(distance))
+arrange(flights,distance)
+```
+
+##5.4.1 Exercises
+
+###1. Brainstorm as many ways as possible to select dep_time, dep_delay, arr_time, and arr_delay from flights.
+
+```{r Question 8}
+select(flights,dep_time,dep_delay,arr_time,arr_delay)
+select(flights,starts_with("dep"),starts_with("arr"))
+select(flights,c(dep_time,dep_delay,arr_time,arr_delay))
+select(flights,-c(year,month,day,sched_dep_time,sched_arr_time,hour,minute,carrier,tailnum,flight,origin,dest,air_time,distance, time_hour))
+select(flights,-c(year,month,day,sched_dep_time,sched_arr_time,hour,minute,carrier,tailnum,flight,origin,dest,air_time,distance, time_hour))
+
+```
+
+
+###2. What happens if you include the name of a variable multiple times in a select() call?
+
+```{r Question 9}
+select(flights,dep_time,dep_time)
+select(flights,dep_time,arr_time,dep_time)
+```
+
+When you include the name of the same variable multiple times, it only calls it once, even if it is split across a variable. 
+
+###3. What does the one_of() function do? Why might it be helpful in conjunction with this vector?
+
+```{r Question 10}
+vars <- c("year", "month", "day", "dep_delay", "arr_delay")
+select(flights,one_of(vars))
+```
+one_of() allows you to select variables from a vector list of varible names. It is helpful because it makes the code easier to read and understand. It also makes making small changes to the variable vector list quickly.
+
+####4. Does the result of running the following code surprise you? How do the select helpers deal with case by default? How can you change that default?
+
+```{r Question 11}
+select(flights, contains("TIME"))
+select(flights, contains("TIME", ignore.case=FALSE))
+```
+
+The results of the following code surprise me because I would assume select() would be case sensitive and therefore not find anything. The default select helpers ignore the case, which makes it so case does not matter at all. In order to make it case sensitive you can add ignore.case=FALSE
+
+##5.5.2 Exercises
+
+###1. Currently dep_time and sched_dep_time are convenient to look at, but hard to compute with because they are not really continuous numbers. Convert them to a more convenient representation of number of minutes since midnight
+
+```{r Question 12}
+(mutate(flights,dep_time = (dep_time %/% 100) *60 + (dep_time%%100)  , sched_dep_time = (sched_dep_time %/% 100) *60 + (sched_dep_time%%100)))
+
+```
+
+###2. Compare air_time with arr_time - dep_time. What do you expect to see? What do you see? What do you need to do to fix it?
+
+```{r Question 13}
+(df <- mutate(flights,dep_time = (dep_time %/% 100) *60 + (dep_time%%100), arr_time = (arr_time %/% 100)*60 + (arr_time%%100)))
+(transmute(df,travel_time = (arr_time - dep_time) %% (60*24),air_time,delta = travel_time - air_time))
+
+```
+
+In theory, the air_time and the calculated arr_time -dep_time should be identical. However, the numbers are not the same and some of the differences are large negative numbers because if a flight left around 11pm and then landed after midnight, you would be subtracting a large number from a number around zero. In order to fix this, you use modular arithmetic for how many minutes in the day there are.
+
+###3. Compare dep_time, sched_dep_time, and dep_delay. How would you expect those three numbers to be related?
+
+```{r Question 14}
+(select(flights, dep_time,sched_dep_time, dep_delay))
+```
+
+It would be expected that the difference between the dep_time and the sched_dep_time would be the same as the dep_delay. The data matches this and the negative numbers represent planes that took off before their scheduled departure time.
+
+###4. Find the 10 most delayed flights using a ranking function. How do you want to handle ties? Carefully read the documentation for min_rank()
+
+```{r Question 15}
+df <- filter(flights,min_rank(desc(dep_delay))<=10)
+(arrange(df,desc(dep_delay)))
+
+```
+
+Ties could be handeled by then ranking them by which ones had the greater arrival delay. In order to break the ties you have to change the coding of ties.method. By default, ties.method for min_rank is "min", which makes all ties have the same position in the order. 
+
+###5. What does 1:3 + 1:10 return? Why?
+
+```{r Question 16}
+1:3 + 1:10
+```
+
+"longer object length is not a multiple of shorter object length [1]  2  4  6  5  7  9  8 10 12 11"
+The vector output is created by adding numbers in index 1-10 from each of the input vectors together. Since the vectors are not of equal lengths and not multiples of each other, the 1:3 vector is repeated until the larger vector has been gone all the way through, but also provides the error message.
+
+###6. What trigonometric functions does R provide?
+
+```{r Question 17}
+#?Trig
+```
+
+cos, sin, tan, acos, asin, atan, atan2, cospi, sinpi, tanpi
+
+###1. Brainstorm at least 5 different ways to assess the typical delay characteristics of a group of flights. Consider the following scenarios:
+
+A flight is 15 minutes early 50% of the time, and 15 minutes late 50% of the time.
+A flight is always 10 minutes late.
+A flight is 30 minutes early 50% of the time, and 30 minutes late 50% of the time.
+99% of the time a flight is on time. 1% of the time it's 2 hours late.
+Which is more important: arrival delay or departure delay?
+
+Out of the previous scenarios, I believe the best scenario to happen is the one where a flight is always 10 minutes late. If the airline company knows this, they can adjust the departure time of the subsequent connecting flights when planning because they for sure know that this plane is always 10 minutes late. For the ones that are early half the time and late half the time, the better one is by far the 15 minutes one because landing 15 minutes later is much better than landing 30 minutes late. At the same time, arriving 15 or 30 minutes early does not really matter, especially if it is referring to departure delay because no matter how much earlier it delays, it will not take off until at least the time that the tickets say. It is hard to compare these to the 99% on time flight because that seems like it would be very good but in the 1% that the flight is 2 hours late, a majority of people will miss their connecting flights and the airline will have to deal with that.
+
+Arrival delay is more important than departure delay because if a plane leaves late, but lands on time, it is not that big of a deal. The main issues with arrival delays is that people will miss their connecting flights and that will cause more issues for the airline companies.
+
+###2. Come up with another approach that will give you the same output as not_cancelled %>% count(dest) and not_cancelled %>% count(tailnum, wt = distance) (without using count())
+
+```{r Question 19}
+(not_cancelled <- flights %>% filter(!is.na(dep_delay), !is.na(arr_delay)))
+
+not_cancelled %>%
+  count(dest)
+
+not_cancelled %>% group_by(dest) %>% tally()
+
+(not_cancelled %>% count(tailnum, wt = distance))
+
+not_cancelled %>% group_by(tailnum) %>% summarise(n = sum(distance))
+```
+
+###3. Our definition of cancelled flights (is.na(dep_delay) | is.na(arr_delay) ) is slightly suboptimal. Why? Which is the most important column?
+
+```{r Question 20}
+(canceled_flights <- flights %>% filter(is.na(dep_delay) | is.na(arr_delay)))
+
+(canceled_flights <- flights %>% filter(is.na(dep_delay)))
+```
+
+The formula is suboptimal because if the dep_delay for a flight is NA, that means the flight never took off or was canceled, meaning that it would never arrive and therefore arr_delay would also always be NA. The most important column is therefore the dep_delay.
+
+###4. Look at the number of cancelled flights per day. Is there a pattern? Is the proportion of cancelled flights related to the average delay?
+
+```{r Question 21}
+df <- group_by(flights,day) 
+canceled_flights <- df %>% filter(is.na(dep_delay))
+summarise(canceled_flights,count = n())
+
+dz <- group_by(flights,day)
+summarise(dz,delay_mean = mean(dep_delay, na.rm = TRUE))
+
+
+```
+
+There seems to be no real pattern besides the one period of three days with the highest amount of cancellations in a row, which probably represents some weather severe weather condition. Of these days with extreme amount of cancellations, there also seems to be a high number of delays.
+
+###5. Which carrier has the worst delays? Challenge: can you disentangle the effects of bad airports vs. bad carriers? Why/why not? (Hint: think about flights %>% group_by(carrier, dest) %>% summarise(n()))
+
+```{r Question 22}
+flights %>% group_by(carrier) %>% summarise(n())
+flights %>% group_by(dest) %>% summarise(n())
+flights %>% group_by(carrier,dest) %>% summarise(n())
+```
+
+UA has the most delays out of all the airlines. By grouping by specific carriers and destinations, you can see that specific airlines have a lot more delays at specific airports than at others. Therefore it could point to the airport itself being bad and not so much the airline.
+
+###6. What does the sort argument to count() do. When might you use it?
+
+The sort argument in count sorts output in descending order of n. This would be helpful if you want to count the airports with the most delays and then print the output in descending order so the biggest ones would be first.
+
+##5.7.1 Exercises
+
+###1. Refer back to the lists of useful mutate and filtering functions. Describe how each operation changes when you combine it with grouping.
+
+For mutate, the two most important operations that can be combined with grouping are sum and mean. These can be used with group by and summarise to calculate the mean and sum of a specific variable for whatever variables you grouped by. These can also be used to calculate proportions. The cummulative and rolling aggregates can also be used in the same way with grouping and summarising.
+
+Filtering itself can be very helpful with the group_by function because you can group data by a specific variable and then filter the groups by specific metrics. Comparisons and Logical Operators could be used to filter the grouped data by filtering out groups with specific variables that do not meet the set criteria. 
+
+###2. Which plane (tailnum) has the worst on-time record?
+
+```{r Question 24}
+
+flights %>%
+  group_by(tailnum) %>%
+  summarise(mean_delay = mean(arr_delay, na.rm=TRUE), flights = n()) %>%
+  arrange(desc(mean_delay))
+  
+
+```
+
+This question does not specify how it wants us to figure out which tailnum has the worst on-time record, so I went by average arrival delay, which gave N844MH as the worst flight. You could also sort via the count of how many flights were delayed for each tailnum.
+
+###3. What time of day should you fly if you want to avoid delays as much as possible?
+
+```{r Question 25}
+flights %>% 
+  group_by(hour) %>%
+  summarise(mean_delay = mean(arr_delay,na.rm=TRUE)) %>%
+  arrange(mean_delay)
+
+flights %>% 
+  group_by(hour) %>%
+  summarise(sum_delay = sum(arr_delay,na.rm=TRUE)) %>%
+  arrange(sum_delay)
+
+```
+
+By sorting by both the average and total delays by hour, the 7th hour of the day, which represents from 6-7am in this data set gives the most negative delays(arriving early) so therefore is the best time to fly. Technically however any flight that has an average or sum less thhan or equal to 0 would all be fine for leaving on time.
+
+###4. For each destination, compute the total minutes of delay. For each flight, compute the proportion of the total delay for its destination.
+
+```{r Question 26}
+flights %>%
+  group_by(dest) %>%
+  summarise(total_delay = sum(arr_delay[arr_delay > 0],na.rm=TRUE)) %>%
+  arrange(total_delay)
+
+flights %>%
+  filter(!is.na(arr_delay))  %>%  
+  group_by(dest) %>%
+  mutate(arr_delay_total = sum(arr_delay[arr_delay > 0]),
+         arr_delay_prop = arr_delay / arr_delay_total) %>%
+  select(tailnum,dest,arr_delay_prop)
+
+```
+
+Since we are only interested in the sum of delays, we included arr_delay > 0 when calculating the sum of the arrival delays so flights arriving early do not throw off the calculation of total delay time. 
+
+###5. Delays are typically temporally correlated: even once the problem that caused the initial delay has been resolved, later flights are delayed to allow earlier flights to leave. Using lag(), explore how the delay of a flight is related to the delay of the immediately preceding flight.
+
+```{r Question 27}
+(connecting_flights <- flights %>%
+  arrange(origin, year, month, dep_time) %>%
+  group_by(origin) %>%
+  mutate(lag_dep = lag(dep_delay)) %>%
+  filter(!is.na(dep_delay), !is.na(lag_dep)) %>%
+  select(origin,year,month,dep_time,dep_delay,lag_dep))
+
+```
+
+In general, if the flight before was delayed, then the next flight is also delayed even though the reason for the initial delay has probably been fixed by then. In addition, when the flight before leaves earlier than expected, the next fight is also likely to do so. 
+
+###6. Look at each destination. Can you find flights that are suspiciously fast? (i.e. flights that represent a potential data entry error). Compute the air time a flight relative to the shortest flight to that destination. Which flights were most delayed in the air?
+
+```{r Question 28}
+flights %>%
+  group_by(dest) %>%
+  arrange(air_time) %>%
+  select(tailnum, sched_dep_time, sched_arr_time, air_time) %>%
+  arrange(air_time)
+
+flights %>%
+  group_by(dest) %>%
+  mutate(shortest = air_time - min(air_time, na.rm = TRUE)) %>%
+  top_n(1, air_time) %>%
+  arrange(-air_time) %>%
+  select(tailnum, sched_dep_time, sched_arr_time, shortest)
+```
+
+For most of the destinations, there is a flight that traveled in much shorter of a time than the expected. In some of these cases, the data shows that the flight only took 20 something minutes, when the difference between the scheduled arrival and departure times are much larger than that, pointing at typos or some other mistake. The second table gives the flights most delayed in the air for a given destination.  
+
+###7. Find all destinations that are flown by at least two carriers. Use that information to rank the carriers.
+
+```{r Question 29}
+flights %>%
+  group_by(dest) %>%
+  filter(n_distinct(carrier) >= 2) %>%
+  group_by(carrier) %>%
+  summarise(n = n_distinct(dest)) %>%
+  arrange(-n)
+
+  
+```
+
+Ranked from carriers with the most destinations to the fewest.
+
+###8. For each plane, count the number of flights before the first delay of greater than 1 hour.
+
+```{r Question 30}
+
+flights %>%
+    mutate(dep_date = lubridate::make_datetime(year, month, day)) %>%
+    group_by(tailnum) %>%
+    arrange(dep_date) %>%
+    filter(!cumany(arr_delay>60)) %>%
+    tally(sort = TRUE)
+```
+
+##Chapter 7
+
+##7.3.4 Exercises
+
+###1. Explore the distribution of each of the x, y, and z variables in diamonds. What do you learn? Think about a diamond and how you might decide which dimension is the length, width, and depth.
+
+```{r Question 31}
+
+ggplot(data=diamonds) + geom_histogram(mapping=aes(x=x))
+ggplot(data=diamonds) + geom_histogram(mapping=aes(x=y))
+ggplot(data=diamonds) + geom_histogram(mapping=aes(x=z))
+
+```
+The x variable has the most variation,while y and z have values that are pretty condensed around a central value. x is length, y is width, and z is depth.
+
+###2. Explore the distribution of price. Do you discover anything unusual or surprising? (Hint: Carefully think about the binwidth and make sure you try a wide range of values.)
+
+```{r Question 32}
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=price))
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=price),binwidth = 1)
+ggplot(data=diamonds) + geom_histogram(mapping=aes(x=price),binwidth = 10)
+```
+
+I find it unusual at how many diamonds were at such a low price point. I also find it interesting that when you decrease the bin size, you can see that certain price points have a peak in count compared to those around them. I wonder what the reasoning for that is. 
+
+###3. How many diamonds are 0.99 carat? How many are 1 carat? What do you think is the cause of the difference?
+
+```{r Question 33}
+(bid_diamonds <- diamonds %>% filter(carat == .99))
+(bid_diamonds <- diamonds %>% filter(carat == 1))
+```
+
+There are 23 diamonds with .99 carats and there are 1558 diamonds with 1 carat. This is mostly caused by either a lack of instument precision, human error, or people purposefully rounding up for business reasons.
+
+###4. Compare and contrast coord_cartesian() vs xlim() or ylim() when zooming in on a histogram. What happens if you leave binwidth unset? What happens if you try and zoom so only half a bar shows?
+
+```{r Question 34}
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=carat)) 
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=carat)) + coord_cartesian()
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=carat)) + xlim(0,10)
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=carat)) + ylim(0,5000)
+```
+
+If you leave the bindwidth unset, it will default to taking the range of values and dividing it by the default number of bins, which is 30. By itself. coord_cartesian does nothing unless you specify a specific x or y limit in it. xlim and ylim on the other hand require you to specify the lower and upper limits of your plot and will cutoff ay values that extend past that limit. If the y value extends past it, it will delete the entire column. For example if you cut the ylim to half of the max count, any column that exceeds that count will be left empty. 
+
+##7.4.1 Exercises
+
+###1. What happens to missing values in a histogram? What happens to missing values in a bar chart? Why is there a difference?
+
+```{r Question 35}
+ggplot(data=diamonds) + geom_histogram(mapping = aes(x=carat))
+cheap <- diamonds %>% mutate(carat = ifelse(carat == 1 , NA, carat))
+ggplot(data=cheap) + geom_histogram(mapping = aes(x=carat))
+ggplot(data=diamonds) + geom_bar(mapping = aes(x=carat))
+ggplot(data=cheap) + geom_bar(mapping=aes(x=carat))
+```
+
+When missing values are used in a histogram, they just don't include them in the plot at all. On the other hand, for bar graphs, they make a column for NA because the X axis does not have to be ordered like it does for a historgram.
+
+###2. What does na.rm = TRUE do in mean() and sum()?
+
+```{r Question 36}
+flights %>% 
+  group_by(year, month, day) %>% 
+  summarise(mean = mean(dep_delay),sum = sum(dep_delay))
+
+flights %>% 
+  group_by(year, month, day) %>% 
+  summarise(mean = mean(dep_delay, na.rm = TRUE),sum = sum(dep_delay, na.rm = TRUE))
+            
+```
+
+The na.rm = TRUE searches through the dep_delays in this case and removes any case where there is NA instead of an actual result. This is important to include in both sum and mean because otherwise you get NA as your output because R cannot assume what the sum of a number and NA would be.
+
+##.7.5.1.1 Exercises
+
+###1. Use what you've learned to improve the visualisation of the departure times of cancelled vs. non-cancelled flights.
+
+```{r Question 37}
+fl <- 
+  flights %>%
+  mutate(cancelled = is.na(dep_time),sched_hour = sched_dep_time %/% 100,sched_min = sched_dep_time %% 100,sched_dep_time = sched_hour + sched_min / 60)
+
+fl %>%
+  ggplot(aes(cancelled, sched_dep_time)) +
+  geom_boxplot()
+```
+
+###2. What variable in the diamonds dataset is most important for predicting the price of a diamond? How is that variable correlated with cut? Why does the combination of those two relationships lead to lower quality diamonds being more expensive?
+
+```{r Question 38}
+diamonds %>%
+  ggplot(aes(cut, price)) +
+  geom_boxplot()
+
+diamonds %>%
+  ggplot(aes(color, price)) +
+  geom_boxplot()
+
+diamonds %>%
+  ggplot(aes(clarity, price)) +
+  geom_boxplot()
+
+diamonds %>%
+  ggplot(aes(carat,price)) + geom_point()
+
+diamonds %>%
+  ggplot(aes(cut,carat)) + geom_boxplot()
+```
+
+From the four plots, it appears that carat and price have the most important covariation that as one increases, so does the other. After making a scatterplot of cut and carat, it shows that a majority of the fair diamonds have the most carats, which when you combine that information with the covariance between carat and price, it makes sense why lower quality cuts are sometimes more expensive.
+
+###3. Install the ggstance package, and create a horizontal boxplot. How does this compare to using coord_flip()?
+
+```{r Question 39}
+#install.packages("ggstance")
+library(ggstance)
+
+diamonds %>%
+  ggplot(aes(cut, price)) +
+  geom_boxplot() +
+  coord_flip()
+
+diamonds %>%
+  ggplot(aes(price, cut)) +
+  geom_boxploth()
+```
+
+The boxplots look the exact same but using the geom_boxploth() from ggstance requires less keystrokes. In addition, I had to reverse the order of variables because it does not flip them the way that coord_flip does.
+
+###4. One problem with boxplots is that they were developed in an era of much smaller datasets and tend to display a prohibitively large number of "outlying values". One approach to remedy this problem is the letter value plot. Install the lvplot package, and try using geom_lv() to display the distribution of price vs cut. What do you learn? How do you interpret the plots?
+
+```{r Question 40}
+#install.packages("lvplot")
+library(lvplot)
+
+diamonds %>%
+  ggplot(aes(cut,price))+
+  geom_lv()
+```
+
+The difference in this type of plot is that the varying widths allow you to know what proportion of the data is at that specific price point for that cut. This type of plot is much better for viewing information about the tails of a dataset, while boxplots allow you to quickly get information about the central 50%. This type of plot also finds much less outliers because the formula used for calculating it is not just based on the IQR.
+
+###5. Compare and contrast geom_violin() with a facetted geom_histogram(), or a coloured geom_freqpoly(). What are the pros and cons of each method?
+
+```{r Question 41}
+diamonds %>%
+  ggplot(aes(cut,price)) +
+  geom_violin()
+
+diamonds %>%
+  ggplot(aes(price)) +
+  geom_histogram() +
+  facet_wrap(~cut)
+
+diamonds %>%
+  ggplot(aes(price)) +
+  geom_freqpoly(aes(colour = cut))
+```
+
+The violin plot is good because the width of the plots correlates to the proportion of the total data that is in that price range, which makes it easy to see how the price varies amongst a given cut quality. This plot however only really seems helpful for the areas that have a good proportion of the dataset, because once you get past $10000 all the lines look essentially the same thickness until the end. This plot is also generally good at letting you see where the majority of the data for the different cut qualities lie against each other at a quick glance.
+
+I believe the histogram is the best for analyzing how the price varies amongst a given cut size, but is not as good for comparing the different cut qualities at the same time as the freq_poly plot. Another positive for this plot is that it is the easiest to read numerically and get a good grasp at what the values truely are. You could also add more variables to the histogram and break the columns up by color or something else.
+
+The freqpoly plot with color is a great way to quickly visualize how the count differs for the different diamond cuts at a specific price point. The plot is not good when all the groups have similiar counts for the same price, such as in the 15000-20000 range on this plot. It becomes almost impossible to distinguish which has a higher count for those values.
+
+###6. If you have a small dataset, it's sometimes useful to use geom_jitter() to see the relationship between a continuous and categorical variable. The ggbeeswarm package provides a number of methods similar to geom_jitter(). List them and briefly describe what each one does.
+
+```{r Question 42}
+#install.packages("ggbeeswarm")
+#library(ggbeeswarm)
+#?ggbeeswarm
+```
+
+geom_beeswarm offsets points within categories to reduce overplotting
+geom_quasirandom uses vipor package to add jitter and reduce oveplotting
+position_beeswarm makes violin point plots to show overlapping points
+position_quasirandom does the same thing 
+
+##7.5.2.1 Exercises
+
+###1.How could you rescale the count dataset above to more clearly show the distribution of cut within colour, or colour within cut?
+
+```{r Question 43}
+diamonds %>%
+  count(color, cut) %>%
+  group_by(color) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(color, cut, fill = percent)) +
+  geom_tile()
+
+```
+
+###2. Use geom_tile() together with dplyr to explore how average flight delays vary by destination and month of year. What makes the plot difficult to read? How could you improve it?
+
+```{r Question 44}
+
+flights %>%
+  ggplot(aes(x = month, y = dest, fill = dep_delay)) +
+  geom_tile()
+```
+
+The plot is very hard to read because there are so many different destinations that the axis becomes hard to read and impossible to tell what lines up where. A better way you could do this would be to rank the top 10 best and worst destinations by flight delay.
+
+###3. Why is it slightly better to use aes(x = color, y = cut) rather than aes(x = cut, y = color) in the example above?
+
+```{r Question 45}
+diamonds %>% 
+  count(color, cut) %>%  
+  ggplot(mapping = aes(x = color, y = cut)) +
+    geom_tile(mapping = aes(fill = n))
+
+diamonds %>% 
+  count(color, cut) %>%  
+  ggplot(mapping = aes(x = cut, y = color)) +
+    geom_tile(mapping = aes(fill = n))
+```
+
+Cut is an ordered categorical variable, while color is not. We are normally used to using plots like bar charts and such where the y axis is ordered, although in this case it is not continuous.
+
+##7.5.3.1 Exercises
+
+###1. Instead of summarising the conditional distribution with a boxplot, you could use a frequency polygon. What do you need to consider when using cut_width() vs cut_number()? How does that impact a visualisation of the 2d distribution of carat and price?
+
+```{r Question 46}
+ggplot(data = diamonds, mapping = aes(color = cut_number(carat, 5), x = price)) +
+  geom_freqpoly() 
+
+ggplot(data = diamonds,mapping = aes(color = cut_width(carat, 0.5, boundary = 0), x = price)) +
+  geom_freqpoly() 
+```
+
+For cut_width, you need to specify the width we are choosing, but for cut_number you only need to specify how many groups you want. When doingit by cut_number, it will separate the amount of reads into 5 groups of the same size, while using cut_width it breaks it down by those specific width measurements, not matter what the count of those groups is. Knowing how these two are treated differently helps you understand the differences in the plot visualizations and why the area of the groups changes.
+
+###2. Visualise the distribution of carat, partitioned by price.
+
+```{r Question 47}
+ggplot(diamonds, aes(carat, colour = cut_width(price, 3000))) +
+  geom_freqpoly()
+```
+
+###3. How does the price distribution of very large diamonds compare to small diamonds. Is it as you expect, or does it surprise you?
+
+```{r Question 48}
+diamonds %>%
+  filter(between(carat, 0, 2.5)) %>%
+  mutate(carat = cut_width(carat, 1)) %>%
+  ggplot(aes(price)) + geom_histogram() + facet_wrap(~ carat)
+
+```
+
+The price for very small data is much more compact and does not vary nearly as much as it does for larger diamonds. For 1.5 to 2.5 carats, the price can range from 5000 to ~17500, while for diamonds between 0 and 0.5 carats, the price only ranges from 0 to ~2500. 
+
+###4. Combine two of the techniques you've learned to visualise the combined distribution of cut, carat, and price.
+
+```{r Question 49}
+diamonds %>%
+  filter(between(carat, 0, 2.5)) %>%
+  mutate(carat = cut_width(carat, 1)) %>%
+  ggplot +
+  geom_bin2d(mapping = aes(x = cut, y = price)) + facet_wrap(~ carat) 
+```
+
+###5. Two dimensional plots reveal outliers that are not visible in one dimensional plots. For example, some points in the plot below have an unusual combination of x and y values, which makes the points outliers even though their x and y values appear normal when examined separately. Why is a scatterplot a better display than a binned plot for this case?
+
+```{r Question 50}
+ggplot(data = diamonds) +
+  geom_point(mapping = aes(x = x, y = y)) +
+  coord_cartesian(xlim = c(4, 11), ylim = c(4, 11))
+
+ggplot(diamonds, aes(x, y)) +
+  geom_bin2d()
+```
+
+Often when binning things like in a histogram, certain relationships are hard to find because we don't know the exact value of the points. We only know that the data point lies somewhere between the boundaries of its bin. In this example, the straight line that is present in the scatterplot is almost impossible to see in the 2d histogram.
+
